@@ -1348,6 +1348,56 @@ def solve_network(
         logger.info(f"Labels:\n{labels}")
         n.model.print_infeasibilities()
         raise RuntimeError("Solving status 'infeasible'. Infeasibilities computed.")
+    
+
+def correct_wind(n: pypsa.Network) -> None:
+    """
+    Correct the wind generation in France to match the expected values.
+
+    Parameters
+    ----------
+    n : pypsa.Network
+        The PyPSA network to correct.
+    """
+    mask = n.generators_t.p_max_pu.columns.str.startswith("FR") & n.generators_t.p_max_pu.columns.str.contains("wind")
+    n.generators_t.p_max_pu.loc[:, mask] *= 0.4
+
+    mask = n.generators_t.p_max_pu.columns.str.startswith("AT") & n.generators_t.p_max_pu.columns.str.contains("wind")
+    n.generators_t.p_max_pu.loc[:, mask] *= 0.756
+
+    mask = n.generators_t.p_max_pu.columns.str.startswith("GR") & n.generators_t.p_max_pu.columns.str.contains("wind")
+    n.generators_t.p_max_pu.loc[:, mask] *= 0.799
+
+    mask = n.generators_t.p_max_pu.columns.str.startswith("ME") & n.generators_t.p_max_pu.columns.str.contains("wind")
+    n.generators_t.p_max_pu.loc[:, mask] *= 0.545
+
+    mask = n.generators_t.p_max_pu.columns.str.startswith("CH") & n.generators_t.p_max_pu.columns.str.contains("wind")
+    n.generators_t.p_max_pu.loc[:, mask] *= 0.49
+
+    mask = n.generators_t.p_max_pu.columns.str.startswith("IT") & n.generators_t.p_max_pu.columns.str.contains("wind")
+    n.generators_t.p_max_pu.loc[:, mask] *= 0.75
+
+    mask = n.generators_t.p_max_pu.columns.str.startswith("IT") & n.generators_t.p_max_pu.columns.str.contains("solar")
+    n.generators_t.p_max_pu.loc[:, mask] *= 1.2
+
+    mask = n.generators.index.str.startswith("GR") & n.generators.index.str.contains("lignite")
+    n.generators.loc[mask, "marginal_cost"] *= 3.7
+
+    mask = n.generators.index.str.startswith("FR") & n.generators.index.str.contains("nuclear")
+    n.generators.loc[mask, "p_max_pu"] = 0.637
+
+    # mask = n.generators.index.str.startswith("IT") & n.generators.index.str.contains("biomass")
+    # n.generators.loc[mask, "p_nom_max"] = 5 * n.generators.loc[mask, "p_nom"] 
+
+    mask = n.generators.index.str.startswith("IT") & n.generators.index.str.contains("geothermal")
+    n.generators.loc[mask, "p_nom"] = 10 * n.generators.loc[mask, "p_nom"]
+
+    # Limit expansion of Greek link with Italy
+    mask = (
+    (n.links.bus0.str.startswith("IT") & n.links.bus1.str.startswith('GR')) |
+    (n.links.bus0.str.startswith('GR') & n.links.bus1.str.startswith("IT"))
+    )
+    n.links.loc[mask, "p_nom_extendable"] = False
 
 
 if __name__ == "__main__":
@@ -1355,12 +1405,10 @@ if __name__ == "__main__":
         from _helpers import mock_snakemake
 
         snakemake = mock_snakemake(
-            "solve_sector_network",
-            opts="",
-            clusters="5",
-            configfiles="config/test/config.overnight.yaml",
-            sector_opts="",
-            planning_horizons="2030",
+            "solve_network",
+            opts="1h",
+            clusters="60",
+            configfiles="config/creta_2025/config_2040.yaml",
         )
     configure_logging(snakemake)
     set_scenario_config(snakemake)
@@ -1381,6 +1429,8 @@ if __name__ == "__main__":
         co2_sequestration_potential=snakemake.params["co2_sequestration_potential"],
         limit_max_growth=snakemake.params.get("sector", {}).get("limit_max_growth"),
     )
+
+    correct_wind(n)
 
     logging_frequency = snakemake.config.get("solving", {}).get(
         "mem_logging_frequency", 30

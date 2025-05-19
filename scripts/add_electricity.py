@@ -66,6 +66,7 @@ from _helpers import (
     update_p_nom_max,
 )
 from pypsa.clustering.spatial import DEFAULT_ONE_PORT_STRATEGIES, normed_or_uniform
+from powerplantmatching.export import map_country_bus
 
 idx = pd.IndexSlice
 
@@ -868,11 +869,11 @@ def attach_hydro(
             inflow=inflow_t.loc[:, hydro.index],
         )
 
-
+"""
 def attach_GEM_renewables(
     n: pypsa.Network, tech_map: dict[str, list[str]], smk_inputs: list[str]
 ) -> None:
-    """
+    
     Attach renewable capacities from the GEM dataset to the network.
 
     Args:
@@ -881,8 +882,10 @@ def attach_GEM_renewables(
 
     Returns:
     - None
-    """
+
     tech_string = ", ".join(tech_map.values())
+    
+    tech_string = ", ".join(sum(tech_map.values(), []))
     logger.info(f"Using GEM renewable capacities for carriers {tech_string}.")
 
     df = pm.data.GEM().powerplant.convert_country_to_alpha2()
@@ -904,6 +907,40 @@ def attach_GEM_renewables(
 
         n.generators.update({"p_nom": caps.dropna()})
         n.generators.update({"p_nom_min": caps.dropna()})
+    """
+def attach_OPSD_renewables(n: pypsa.Network, tech_map: dict[str, list[str]]) -> None:
+    """
+    Attach renewable capacities from the OPSD dataset to the network.
+
+    Args:
+    - n: The PyPSA network to attach the capacities to.
+    - tech_map: A dictionary mapping fuel types to carrier names.
+
+    Returns:
+    - None
+    """
+    tech_string = ", ".join(sum(tech_map.values(), []))
+    logger.info(f"Using OPSD renewable capacities for carriers {tech_string}.")
+
+    df = pm.data.OPSD_VRE().powerplant.convert_country_to_alpha2()
+    technology_b = ~df.Technology.isin(["Onshore", "Offshore"])
+    df["Fueltype"] = df.Fueltype.where(technology_b, df.Technology).replace(
+        {"Solar": "PV"}
+    )
+    df = df.query("Fueltype in @tech_map").powerplant.convert_country_to_alpha2()
+    df = df.dropna(subset=["lat", "lon"])
+
+    for fueltype, carriers in tech_map.items():
+        gens = n.generators[lambda df: df.carrier.isin(carriers)]
+        buses = n.buses.loc[gens.bus.unique()]
+        gens_per_bus = gens.groupby("bus").p_nom.count()
+
+        caps = map_country_bus(df.query("Fueltype == @fueltype"), buses)
+        caps = caps.groupby(["bus"]).Capacity.sum()
+        caps = caps / gens_per_bus.reindex(caps.index, fill_value=1)
+
+        n.generators.update({"p_nom": gens.bus.map(caps).dropna()})
+        n.generators.update({"p_nom_min": gens.bus.map(caps).dropna()})
 
 
 def estimate_renewable_capacities(
@@ -1128,11 +1165,12 @@ def attach_stores(
         )
 
 
+
 if __name__ == "__main__":
     if "snakemake" not in globals():
         from _helpers import mock_snakemake
 
-        snakemake = mock_snakemake("add_electricity", clusters=100)
+        snakemake = mock_snakemake("add_electricity", clusters=60, configfiles="config/creta_2025/config_2019.yaml")
     configure_logging(snakemake)  # pylint: disable=E0606
     set_scenario_config(snakemake)
 
@@ -1248,7 +1286,7 @@ if __name__ == "__main__":
             year = estimate_renewable_caps["year"]
 
             if estimate_renewable_caps["from_gem"]:
-                attach_GEM_renewables(n, tech_map, snakemake.input)
+                attach_OPSD_renewables(n, tech_map)
 
             estimate_renewable_capacities(
                 n, year, tech_map, expansion_limit, params.countries

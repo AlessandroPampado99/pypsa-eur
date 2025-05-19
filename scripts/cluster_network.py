@@ -173,12 +173,26 @@ def distribute_n_clusters_to_countries(
         )
 
         for country, weight in focus_weights.items():
-            L[country] = weight / len(L[country])
+            sub_network = country.split("_")[1] if "_" in country else None
+            country = country.split("_")[0] if "_" in country else country
+            if sub_network is not None:
+                L[country, sub_network] = weight
+            else:
+                L[country] = weight / len(L[country])
 
-        remainder = [
-            c not in focus_weights.keys() for c in L.index.get_level_values("country")
+        # remainder = [
+        #     c not in focus_weights.keys() for c in L.index.get_level_values("country")
+        #]
+        # L[remainder] = L.loc[remainder].pipe(normed) * (1 - total_focus)
+
+        
+        multiindex_keys = [
+            f"{country}_{sub}" if pd.notna(sub) else country
+            for country, sub in L.index
         ]
-        L[remainder] = L.loc[remainder].pipe(normed) * (1 - total_focus)
+        remainder_mask = ~pd.Series(multiindex_keys, index=L.index).isin(focus_weights.keys())
+        L.loc[remainder_mask] = L.loc[remainder_mask].pipe(normed) * (1 - total_focus)
+
 
         logger.warning("Using custom focus weights for determining number of clusters.")
 
@@ -459,7 +473,7 @@ if __name__ == "__main__":
     if "snakemake" not in globals():
         from _helpers import mock_snakemake
 
-        snakemake = mock_snakemake("cluster_network", clusters=60)
+        snakemake = mock_snakemake("cluster_network", clusters=60, configfiles="config/creta_2025/config_2019.yaml")
     configure_logging(snakemake)
     set_scenario_config(snakemake)
 

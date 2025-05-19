@@ -1,0 +1,98 @@
+# -*- coding: utf-8 -*-
+# SPDX-FileCopyrightText: : 2017-2023 The PyPSA-Eur Authors
+#
+# SPDX-License-Identifier: MIT
+
+# This file is used to define the scenarios that are run by snakemake. Each entry on the first level is a scenario. Each scenario can contain configuration overrides with respect to the config/config.yaml settings.
+#
+# Example
+#
+# custom-scenario: # name of the scenario
+#   electricity:
+#       renewable_carriers: [wind, solar] # override the list of renewable carriers
+
+low_electrical_demand:
+  load:
+    interpolate_limit: 3
+    time_shift_for_large_gaps: 1w
+    manual_adjustments: true # false
+    scaling_factor: 1.3741
+    fixed_year: 2019 # false or year (e.g. 2013)
+    supplement_synthetic: true
+    distribution_key:
+      gdp: 0.6
+      population: 0.4
+
+commodity_steps:
+  costs:
+    overwrites: {'fuel': {'oil': 43.36, 'gas': 23.79, 'coal': 8.92}}
+
+commodity_apg:
+  costs:
+    overwrites: {'fuel': {'oil': 35.48, 'gas': 16.28, 'coal': 6.59}}
+
+commodity_nze:
+  costs:
+    overwrites: {'fuel': {'oil': 16.9, 'gas': 12.84, 'coal': 5.56}}
+
+no_co2_emissions:
+  electricity:
+    voltages: [220., 300., 330., 380., 400., 500., 750.]
+    base_network: osm-prebuilt
+    osm-prebuilt-version: 0.6
+    gaslimit_enable: false
+    gaslimit: false
+    co2limit_enable: true
+    co2limit: 0
+    co2base: 1.487e+9
+
+bio_expansion_noco2:
+  electricity:
+    voltages: [220., 300., 330., 380., 400., 500., 750.]
+    base_network: osm-prebuilt
+    osm-prebuilt-version: 0.6
+    gaslimit_enable: false
+    gaslimit: false
+    co2limit_enable: true
+    co2limit: 0
+    co2base: 1.487e+9
+
+nuclear_base:
+  electricity:
+    everywhere_powerplants: [nuclear]
+
+nuclear_no_emissions:
+  electricity:
+    everywhere_powerplants: [nuclear]
+    voltages: [220., 300., 330., 380., 400., 500., 750.]
+    base_network: osm-prebuilt
+    osm-prebuilt-version: 0.6
+    gaslimit_enable: false
+    gaslimit: false
+    co2limit_enable: true
+    co2limit: 0
+    co2base: 1.487e+9
+
+nuclear_smr:
+  electricity:
+    everywhere_powerplants: [nuclear, smr_pwr]
+    conventional_carriers: [nuclear, oil, OCGT, CCGT, lignite, geothermal, biomass, smr_pwr]
+
+    extendable_carriers:
+      Generator: [solar, onwind, offwind-ac, offwind-dc, offwind-float, OCGT, CCGT, nuclear, biomass, smr_pwr]
+      StorageUnit: [] # battery, H2
+      Store: [battery, H2]
+      Link: [] # H2 pipeline
+
+  pypsa_eur:
+    Generator:
+    - onwind
+    - offwind-ac
+    - offwind-dc
+    - offwind-float
+    - solar-hsat
+    - solar
+    - ror
+    - nuclear
+    - smr_pwr
+
