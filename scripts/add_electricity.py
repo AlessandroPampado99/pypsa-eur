@@ -52,6 +52,15 @@ import logging
 from collections.abc import Iterable
 from typing import Any
 
+import sys
+from pathlib import Path
+
+# Ensure project root is in sys.path
+project_root = Path(__file__).resolve().parents[1]
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+
 import geopandas as gpd
 import numpy as np
 import pandas as pd
@@ -1133,7 +1142,7 @@ if __name__ == "__main__":
     if "snakemake" not in globals():
         from scripts._helpers import mock_snakemake
 
-        snakemake = mock_snakemake("add_electricity", clusters=100)
+        snakemake = mock_snakemake("add_electricity", clusters=60, configfiles='config/config_2019.yaml')
     configure_logging(snakemake)  # pylint: disable=E0606
     set_scenario_config(snakemake)
 
